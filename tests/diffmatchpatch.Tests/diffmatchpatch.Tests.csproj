@@ -2,8 +2,11 @@
 
   <PropertyGroup>
     <TargetFramework>netcoreapp3.1</TargetFramework>
-
     <IsPackable>false</IsPackable>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\diff.match.patch\diff.match.patch.csproj" />
+  </ItemGroup>
 
 </Project>
