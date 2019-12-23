@@ -4,37 +4,37 @@ using System;
 using System.Text;
 using Xunit;
 
-public class diff_match_patchTest : diff_match_patch {
+public class diff_match_patchTest : DiffMatchPatch.DiffMatchPatch {
     [Fact]
     public void diff_commonPrefixTest() {
         // Detect any common suffix.
-        Assert.Equal(0, this.diff_commonPrefix("abc", "xyz"));
-        Assert.Equal(4, this.diff_commonPrefix("1234abcdef", "1234xyz"));
-        Assert.Equal(4, this.diff_commonPrefix("1234", "1234xyz"));
+        Assert.Equal(0, this.ComputeCommonPrefix("abc", "xyz"));
+        Assert.Equal(4, this.ComputeCommonPrefix("1234abcdef", "1234xyz"));
+        Assert.Equal(4, this.ComputeCommonPrefix("1234", "1234xyz"));
     }
 
     [Fact]
     public void diff_commonSuffixTest() {
         // Detect any common suffix.
-        Assert.Equal(0, this.diff_commonSuffix("abc", "xyz"));
-        Assert.Equal(4, this.diff_commonSuffix("abcdef1234", "xyz1234"));
-        Assert.Equal(4, this.diff_commonSuffix("1234", "xyz1234"));
+        Assert.Equal(0, this.ComputeCommpnSuffix("abc", "xyz"));
+        Assert.Equal(4, this.ComputeCommpnSuffix("abcdef1234", "xyz1234"));
+        Assert.Equal(4, this.ComputeCommpnSuffix("1234", "xyz1234"));
     }
 
     [Fact]
     public void diff_commonOverlapTest() {
         // Detect any suffix/prefix overlap.
-        Assert.Equal(0, this.diff_commonOverlap("", "abcd"));
+        Assert.Equal(0, this.ComputeCommonOverlap("", "abcd"));
 
-        Assert.Equal(3, this.diff_commonOverlap("abc", "abcd"));
+        Assert.Equal(3, this.ComputeCommonOverlap("abc", "abcd"));
 
-        Assert.Equal(0, this.diff_commonOverlap("123456", "abcd"));
+        Assert.Equal(0, this.ComputeCommonOverlap("123456", "abcd"));
 
-        Assert.Equal(3, this.diff_commonOverlap("123456xxx", "xxxabcd"));
+        Assert.Equal(3, this.ComputeCommonOverlap("123456xxx", "xxxabcd"));
 
         // Some overly clever languages (C#) may treat ligatures as equal to their
         // component letters.  E.g. U+FB01 == 'fi'
-        Assert.Equal(0, this.diff_commonOverlap("fi", "\ufb01i"));
+        Assert.Equal(0, this.ComputeCommonOverlap("fi", "\ufb01i"));
     }
 
     [Fact]
@@ -72,7 +72,7 @@ public class diff_match_patchTest : diff_match_patch {
         tmpVector.Add("");
         tmpVector.Add("alpha\n");
         tmpVector.Add("beta\n");
-        Object[] result = this.diff_linesToChars("alpha\nbeta\nalpha\n", "beta\nalpha\nbeta\n");
+        Object[] result = this.ConvertLinesToCharacters("alpha\nbeta\nalpha\n", "beta\nalpha\nbeta\n");
         Assert.Equal("\u0001\u0002\u0001", (string)result[0]);
         Assert.Equal("\u0002\u0001\u0002", (string)result[1]);
         Assert.Equal(tmpVector, (List<string>)result[2]);
@@ -82,7 +82,7 @@ public class diff_match_patchTest : diff_match_patch {
         tmpVector.Add("alpha\r\n");
         tmpVector.Add("beta\r\n");
         tmpVector.Add("\r\n");
-        result = this.diff_linesToChars("", "alpha\r\nbeta\r\n\r\n\r\n");
+        result = this.ConvertLinesToCharacters("", "alpha\r\nbeta\r\n\r\n\r\n");
         Assert.Equal("", (string)result[0]);
         Assert.Equal("\u0001\u0002\u0003\u0003", (string)result[1]);
         Assert.Equal(tmpVector, (List<string>)result[2]);
@@ -91,7 +91,7 @@ public class diff_match_patchTest : diff_match_patch {
         tmpVector.Add("");
         tmpVector.Add("a");
         tmpVector.Add("b");
-        result = this.diff_linesToChars("a", "b");
+        result = this.ConvertLinesToCharacters("a", "b");
         Assert.Equal("\u0001", (string)result[0]);
         Assert.Equal("\u0002", (string)result[1]);
         Assert.Equal(tmpVector, (List<string>)result[2]);
@@ -111,7 +111,7 @@ public class diff_match_patchTest : diff_match_patch {
         string chars = charList.ToString();
         Assert.Equal(n, chars.Length);
         tmpVector.Insert(0, "");
-        result = this.diff_linesToChars(lines, "");
+        result = this.ConvertLinesToCharacters(lines, "");
         Assert.Equal(chars, (string)result[0]);
         Assert.Equal("", (string)result[1]);
         Assert.Equal(tmpVector, (List<string>)result[2]);
@@ -132,7 +132,7 @@ public class diff_match_patchTest : diff_match_patch {
         tmpVector.Add("");
         tmpVector.Add("alpha\n");
         tmpVector.Add("beta\n");
-        this.diff_charsToLines(diffs, tmpVector);
+        this.ConvertCharactersToLines(diffs, tmpVector);
         Assert.Equal(new List<Diff> {
         new Diff(Operation.EQUAL, "alpha\nbeta\nalpha\n"),
         new Diff(Operation.INSERT, "beta\nalpha\nbeta\n")}, diffs);
@@ -153,7 +153,7 @@ public class diff_match_patchTest : diff_match_patch {
         Assert.Equal(n, chars.Length);
         tmpVector.Insert(0, "");
         diffs = new List<Diff> { new Diff(Operation.DELETE, chars) };
-        this.diff_charsToLines(diffs, tmpVector);
+        this.ConvertCharactersToLines(diffs, tmpVector);
         Assert.Equal(new List<Diff>
             {new Diff(Operation.DELETE, lines)}, diffs);
 
@@ -163,9 +163,9 @@ public class diff_match_patchTest : diff_match_patch {
             lineList.Append(i + "\n");
         }
         chars = lineList.ToString();
-        Object[] result = this.diff_linesToChars(chars, "");
+        Object[] result = this.ConvertLinesToCharacters(chars, "");
         diffs = new List<Diff> { new Diff(Operation.INSERT, (string)result[0]) };
-        this.diff_charsToLines(diffs, (List<string>)result[2]);
+        this.ConvertCharactersToLines(diffs, (List<string>)result[2]);
         Assert.Equal(chars, diffs[0].text);
     }
 
@@ -644,57 +644,57 @@ public class diff_match_patchTest : diff_match_patch {
         // the insertion and deletion pairs are swapped.
         // If the order changes, tweak this test as required.
         List<Diff> diffs = new List<Diff> { new Diff(Operation.DELETE, "c"), new Diff(Operation.INSERT, "m"), new Diff(Operation.EQUAL, "a"), new Diff(Operation.DELETE, "t"), new Diff(Operation.INSERT, "p") };
-        Assert.Equal(diffs, this.diff_bisect(a, b, DateTime.MaxValue));
+        Assert.Equal(diffs, this.ComputeDiffBisect(a, b));
 
         // Timeout.
         diffs = new List<Diff> { new Diff(Operation.DELETE, "cat"), new Diff(Operation.INSERT, "map") };
-        Assert.Equal(diffs, this.diff_bisect(a, b, DateTime.MinValue));
+        Assert.Equal(diffs, this.ComputeDiffBisect(a, b));
     }
 
     [Fact]
     public void diff_mainTest() {
         // Perform a trivial diff.
         List<Diff> diffs = new List<Diff> { };
-        Assert.Equal(diffs, this.diff_main("", "", false));
+        Assert.Equal(diffs, this.Diff("", "", false));
 
         diffs = new List<Diff> { new Diff(Operation.EQUAL, "abc") };
-        Assert.Equal(diffs, this.diff_main("abc", "abc", false));
+        Assert.Equal(diffs, this.Diff("abc", "abc", false));
 
         diffs = new List<Diff> { new Diff(Operation.EQUAL, "ab"), new Diff(Operation.INSERT, "123"), new Diff(Operation.EQUAL, "c") };
-        Assert.Equal(diffs, this.diff_main("abc", "ab123c", false));
+        Assert.Equal(diffs, this.Diff("abc", "ab123c", false));
 
         diffs = new List<Diff> { new Diff(Operation.EQUAL, "a"), new Diff(Operation.DELETE, "123"), new Diff(Operation.EQUAL, "bc") };
-        Assert.Equal(diffs, this.diff_main("a123bc", "abc", false));
+        Assert.Equal(diffs, this.Diff("a123bc", "abc", false));
 
         diffs = new List<Diff> { new Diff(Operation.EQUAL, "a"), new Diff(Operation.INSERT, "123"), new Diff(Operation.EQUAL, "b"), new Diff(Operation.INSERT, "456"), new Diff(Operation.EQUAL, "c") };
-        Assert.Equal(diffs, this.diff_main("abc", "a123b456c", false));
+        Assert.Equal(diffs, this.Diff("abc", "a123b456c", false));
 
         diffs = new List<Diff> { new Diff(Operation.EQUAL, "a"), new Diff(Operation.DELETE, "123"), new Diff(Operation.EQUAL, "b"), new Diff(Operation.DELETE, "456"), new Diff(Operation.EQUAL, "c") };
-        Assert.Equal(diffs, this.diff_main("a123b456c", "abc", false));
+        Assert.Equal(diffs, this.Diff("a123b456c", "abc", false));
 
         // Perform a real diff.
         // Switch off the timeout.
         this.Diff_Timeout = 0;
         diffs = new List<Diff> { new Diff(Operation.DELETE, "a"), new Diff(Operation.INSERT, "b") };
-        Assert.Equal(diffs, this.diff_main("a", "b", false));
+        Assert.Equal(diffs, this.Diff("a", "b", false));
 
         diffs = new List<Diff> { new Diff(Operation.DELETE, "Apple"), new Diff(Operation.INSERT, "Banana"), new Diff(Operation.EQUAL, "s are a"), new Diff(Operation.INSERT, "lso"), new Diff(Operation.EQUAL, " fruit.") };
-        Assert.Equal(diffs, this.diff_main("Apples are a fruit.", "Bananas are also fruit.", false));
+        Assert.Equal(diffs, this.Diff("Apples are a fruit.", "Bananas are also fruit.", false));
 
         diffs = new List<Diff> { new Diff(Operation.DELETE, "a"), new Diff(Operation.INSERT, "\u0680"), new Diff(Operation.EQUAL, "x"), new Diff(Operation.DELETE, "\t"), new Diff(Operation.INSERT, new string(new char[] { (char)0 })) };
-        Assert.Equal(diffs, this.diff_main("ax\t", "\u0680x" + (char)0, false));
+        Assert.Equal(diffs, this.Diff("ax\t", "\u0680x" + (char)0, false));
 
         diffs = new List<Diff> { new Diff(Operation.DELETE, "1"), new Diff(Operation.EQUAL, "a"), new Diff(Operation.DELETE, "y"), new Diff(Operation.EQUAL, "b"), new Diff(Operation.DELETE, "2"), new Diff(Operation.INSERT, "xab") };
-        Assert.Equal(diffs, this.diff_main("1ayb2", "abxab", false));
+        Assert.Equal(diffs, this.Diff("1ayb2", "abxab", false));
 
         diffs = new List<Diff> { new Diff(Operation.INSERT, "xaxcx"), new Diff(Operation.EQUAL, "abc"), new Diff(Operation.DELETE, "y") };
-        Assert.Equal(diffs, this.diff_main("abcy", "xaxcxabc", false));
+        Assert.Equal(diffs, this.Diff("abcy", "xaxcxabc", false));
 
         diffs = new List<Diff> { new Diff(Operation.DELETE, "ABCD"), new Diff(Operation.EQUAL, "a"), new Diff(Operation.DELETE, "="), new Diff(Operation.INSERT, "-"), new Diff(Operation.EQUAL, "bcd"), new Diff(Operation.DELETE, "="), new Diff(Operation.INSERT, "-"), new Diff(Operation.EQUAL, "efghijklmnopqrs"), new Diff(Operation.DELETE, "EFGHIJKLMNOefg") };
-        Assert.Equal(diffs, this.diff_main("ABCDa=bcd=efghijklmnopqrsEFGHIJKLMNOefg", "a-bcd-efghijklmnopqrs", false));
+        Assert.Equal(diffs, this.Diff("ABCDa=bcd=efghijklmnopqrsEFGHIJKLMNOefg", "a-bcd-efghijklmnopqrs", false));
 
         diffs = new List<Diff> { new Diff(Operation.INSERT, " "), new Diff(Operation.EQUAL, "a"), new Diff(Operation.INSERT, "nd"), new Diff(Operation.EQUAL, " [[Pennsylvania]]"), new Diff(Operation.DELETE, " and [[New") };
-        Assert.Equal(diffs, this.diff_main("a [[Pennsylvania]] and [[New", " and [[Pennsylvania]]", false));
+        Assert.Equal(diffs, this.Diff("a [[Pennsylvania]] and [[New", " and [[Pennsylvania]]", false));
 
         this.Diff_Timeout = 0.1f;  // 100ms
         string a = "`Twas brillig, and the slithy toves\nDid gyre and gimble in the wabe:\nAll mimsy were the borogoves,\nAnd the mome raths outgrabe.\n";
@@ -705,7 +705,7 @@ public class diff_match_patchTest : diff_match_patch {
             b += b;
         }
         DateTime startTime = DateTime.Now;
-        this.diff_main(a, b);
+        this.Diff(a, b);
         DateTime endTime = DateTime.Now;
         // Test that we took at least the timeout period.
         Assert.True(new TimeSpan(((long)(this.Diff_Timeout * 1000)) * 10000) <= endTime - startTime);
@@ -719,16 +719,16 @@ public class diff_match_patchTest : diff_match_patch {
         // Must be long to pass the 100 char cutoff.
         a = "1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n";
         b = "abcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\nabcdefghij\n";
-        Assert.Equal(this.diff_main(a, b, true), this.diff_main(a, b, false));
+        Assert.Equal(this.Diff(a, b, true), this.Diff(a, b, false));
 
         a = "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890";
         b = "abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij";
-        Assert.Equal(this.diff_main(a, b, true), this.diff_main(a, b, false));
+        Assert.Equal(this.Diff(a, b, true), this.Diff(a, b, false));
 
         a = "1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n";
         b = "abcdefghij\n1234567890\n1234567890\n1234567890\nabcdefghij\n1234567890\n1234567890\n1234567890\nabcdefghij\n1234567890\n1234567890\n1234567890\nabcdefghij\n";
-        string[] texts_linemode = diff_rebuildtexts(this.diff_main(a, b, true));
-        string[] texts_textmode = diff_rebuildtexts(this.diff_main(a, b, false));
+        string[] texts_linemode = diff_rebuildtexts(this.Diff(a, b, true));
+        string[] texts_textmode = diff_rebuildtexts(this.Diff(a, b, false));
         Assert.Equal(texts_textmode, texts_linemode);
 
         // Test null inputs -- not needed because nulls can't be passed in C#.
@@ -909,7 +909,7 @@ public class diff_match_patchTest : diff_match_patch {
         patches = this.patch_make(text1, text2);
         Assert.Equal(expectedPatch, this.patch_toText(patches));
 
-        List<Diff> diffs = this.diff_main(text1, text2, false);
+        List<Diff> diffs = this.Diff(text1, text2, false);
         patches = this.patch_make(diffs);
         Assert.Equal(expectedPatch, this.patch_toText(patches));
 
