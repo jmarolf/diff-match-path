@@ -6,7 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Microsoft.CodeAnalysis.Diff\Microsoft.CodeAnalysis.Diff.csproj" />
+    <ProjectReference Include="..\..\src\Microsoft.CodeAnalysis.Diff\Microsoft.CodeAnalysis.DiffMatchPatch.csproj" />
   </ItemGroup>
 
 </Project>
