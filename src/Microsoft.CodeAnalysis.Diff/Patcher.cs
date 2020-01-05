@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Text;
 
 namespace Microsoft.CodeAnalysis.DiffMatchPatch {
     public static class Patcher {
