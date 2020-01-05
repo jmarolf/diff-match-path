@@ -1,22 +1,15 @@
 ﻿using System;
-using System.Linq;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
-using System.Security;
+using System.Linq;
 using System.Text;
-using System.ComponentModel.DataAnnotations;
-using System.Globalization;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Runtime.CompilerServices;
-using System.Threading.Channels;
 using System.Text.RegularExpressions;
 
 namespace Microsoft.CodeAnalysis.DiffMatchPatch {
     public static class Differ {
-        public static ImmutableArray<Diff> ComputeDiff(string left, string right) {
-            return ComputeDiff(left.AsSpan(), right.AsSpan());
-        }
+        public static ImmutableArray<Diff> ComputeDiff(string left, string right)
+            => ComputeDiff(left.AsSpan(), right.AsSpan());
 
         public static ImmutableArray<Diff> ComputeDiff(ReadOnlySpan<char> left, ReadOnlySpan<char> right) {
             var builder = ImmutableArray.CreateBuilder<Diff>();
