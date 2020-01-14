@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace Microsoft.CodeAnalysis.DiffMatchPatch {
+namespace Microsoft.CodeAnalysis.Text {
     public static class Differ {
         public static ImmutableArray<Diff> ComputeDiff(string left, string right)
             => ComputeDiff(left.AsSpan(), right.AsSpan());
@@ -20,7 +20,7 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
         private static void ComputeDiff(ReadOnlySpan<char> left, ReadOnlySpan<char> right, ImmutableArray<Diff>.Builder builder) {
             // Check for equality
             if (left.SequenceEqual(right)) {
-                builder.Add(new Diff(Operation.EQUAL, left));
+                builder.AddIfNotEmpty(new Diff(Operation.EQUAL, left));
                 return;
             }
 
@@ -42,10 +42,10 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
 
             // Restore the prefix and suffix.
             if (commonPrefix.Length > 0) {
-                builder.Add(new Diff(Operation.EQUAL, commonPrefix));
+                builder.AddIfNotEmpty(new Diff(Operation.EQUAL, commonPrefix));
             }
             if (commonSuffix.Length > 0) {
-                builder.Add(new Diff(Operation.EQUAL, commonSuffix));
+                builder.AddIfNotEmpty(new Diff(Operation.EQUAL, commonSuffix));
             }
 
             CleanUpMerge(builder);
@@ -77,13 +77,13 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
         private static void ComputeDiffImpl(ReadOnlySpan<char> left, ReadOnlySpan<char> right, ImmutableArray<Diff>.Builder builder) {
             // Only text was added
             if (left.Length == 0) {
-                builder.Add(new Diff(Operation.INSERT, right));
+                builder.AddIfNotEmpty(new Diff(Operation.INSERT, right));
                 return;
             }
 
             // Only text was deleted
             if (right.Length == 0) {
-                builder.Add(new Diff(Operation.DELETE, right));
+                builder.AddIfNotEmpty(new Diff(Operation.DELETE, left));
                 return;
             }
 
@@ -94,17 +94,17 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
             // Shorter text is inside the longer text
             if (index != -1) {
                 Operation op = (left.Length > right.Length) ? Operation.DELETE : Operation.INSERT;
-                builder.Add(new Diff(op, longText.Slice(0, index)));
-                builder.Add(new Diff(Operation.EQUAL, shortText));
-                builder.Add(new Diff(op, longText.Slice(index + shortText.Length)));
+                builder.AddIfNotEmpty(new Diff(op, longText.Slice(0, index)));
+                builder.AddIfNotEmpty(new Diff(Operation.EQUAL, shortText));
+                builder.AddIfNotEmpty(new Diff(op, longText.Slice(index + shortText.Length)));
                 return;
             }
 
             // Single character string.
             // After the previous speedup, the character can't be an equality.
             if (shortText.Length == 1) {
-                builder.Add(new Diff(Operation.DELETE, left));
-                builder.Add(new Diff(Operation.INSERT, right));
+                builder.AddIfNotEmpty(new Diff(Operation.DELETE, left));
+                builder.AddIfNotEmpty(new Diff(Operation.INSERT, right));
                 return;
             }
 
@@ -112,7 +112,7 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
             var success = TryComputeHalfMatch(left, right, out var leftA, out var leftB, out var rightA, out var rightB, out var common);
             if (success) {
                 ComputeDiff(leftA, rightA, builder);
-                builder.Add(new Diff(Operation.EQUAL, common));
+                builder.AddIfNotEmpty(new Diff(Operation.EQUAL, common));
                 ComputeDiff(leftB, rightB, builder);
                 return;
             }
@@ -152,22 +152,19 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
 
             if (!halfMatch1 && !halfMatch2) {
                 return false;
-            }
-            else if (!halfMatch2) {
+            } else if (!halfMatch2) {
                 leftA = bestLongTextA1;
                 leftB = bestLongTextB1;
                 rightA = bestShortTextA1;
                 rightB = bestShortTextB1;
                 common = bestCommon1;
-            }
-            else if (!halfMatch1) {
+            } else if (!halfMatch1) {
                 leftA = bestLongTextA2;
                 leftB = bestLongTextB2;
                 rightA = bestShortTextA2;
                 rightB = bestShortTextB2;
                 common = bestCommon2;
-            }
-            else {
+            } else {
                 // Both matched.  Select the longest.
                 if (bestCommon1.Length > bestCommon2.Length) {
                     leftA = bestLongTextA1;
@@ -175,8 +172,7 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
                     rightA = bestShortTextA1;
                     rightB = bestShortTextB1;
                     common = bestCommon1;
-                }
-                else {
+                } else {
                     leftA = bestLongTextA2;
                     leftB = bestLongTextB2;
                     rightA = bestShortTextA2;
@@ -197,14 +193,16 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
                                              out ReadOnlySpan<char> bestShortTextB,
                                              out ReadOnlySpan<char> bestCommon) {
             // Start with a 1/4 length Substring at position i as a seed.
-            var seed = longText.Slice(index, longText.Length / 4);
+            var seed = new string(longText.Slice(index, longText.Length / 4).ToArray());
             int j = -1;
             bestCommon = default;
             bestLongTextA = default;
             bestLongTextB = default;
             bestShortTextA = default;
             bestShortTextB = default;
-            while (j < shortText.Length && (j = shortText.Slice(j + 1).IndexOf(seed)) != -1) {
+
+            var shortTextString = new string(shortText.ToArray());
+            while (j < shortText.Length && (j = shortTextString.IndexOf(seed, j + 1, StringComparison.Ordinal)) != -1) {
                 int prefixLength = ComputeCommonPrefix(longText.Slice(index), shortText.Slice(j));
                 int suffixLength = ComputeCommonSuffix(longText.Slice(0, index), shortText.Slice(0, j));
                 if (bestCommon.Length < suffixLength + prefixLength) {
@@ -217,8 +215,7 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
             }
             if (bestCommon.Length * 2 >= longText.Length) {
                 return true;
-            }
-            else {
+            } else {
                 return false;
             }
         }
@@ -234,29 +231,25 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
 
             // Rediff any replacement blocks, this time character-by-character.
             // Add a dummy entry at the end.
-            builder.Add(new Diff(Operation.EQUAL, string.Empty));
+            builder.AddIfNotEmpty(new Diff(Operation.EQUAL, string.Empty));
             int pointer = 0;
             int deleteCount = 0;
             int insertCount = 0;
-            int? deletedTextStartIndex = default;
-            int deletedTextEndIndex = default;
-            int? insertedTextStartIndex = default;
-            int insertedTextEndIndex = default;
+            ReadOnlySpan<char> deletedText = default;
+            ReadOnlySpan<char> insertedText = default;
             while (pointer < builder.Count) {
                 switch (builder[pointer].Operation) {
                     case Operation.INSERT:
                         insertCount++;
-                        if (insertedTextStartIndex == null) {
-                            insertedTextStartIndex = builder[pointer].StartIndex;
+                        if (insertedText == default) {
+                            insertedText = builder[pointer].Text.Span;
                         }
-                        insertedTextEndIndex = builder[pointer].EndIndex;
                         break;
                     case Operation.DELETE:
                         deleteCount++;
-                        if (deletedTextStartIndex == null) {
-                            deletedTextStartIndex = builder[pointer].StartIndex;
+                        if (deletedText == default) {
+                            deletedText = builder[pointer].Text.Span;
                         }
-                        deletedTextEndIndex = builder[pointer].EndIndex;
                         break;
                     case Operation.EQUAL:
                         // Upon reaching an equality, check for prior redundancies.
@@ -268,7 +261,7 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
 
                             pointer = pointer - deleteCount - insertCount;
                             var newBuilder = ImmutableArray.CreateBuilder<Diff>();
-                            ComputeDiff(left.Slice(deletedTextStartIndex ?? 0, deletedTextEndIndex), right.Slice(insertedTextStartIndex ?? 0, insertedTextEndIndex), newBuilder);
+                            ComputeDiff(deletedText, insertedText, newBuilder);
                             for (int i = 0; i < newBuilder.Count; i++) {
                                 builder.Insert(i + pointer, newBuilder[i]);
                             }
@@ -276,10 +269,8 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
                         }
                         insertCount = 0;
                         deleteCount = 0;
-                        deletedTextStartIndex = default;
-                        deletedTextEndIndex = default;
-                        insertedTextStartIndex = default;
-                        insertedTextEndIndex = default;
+                        deletedText = default;
+                        insertedText = default;
                         break;
                     default:
                         break;
@@ -320,8 +311,7 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
 
                 if (lineHash.ContainsKey(line)) {
                     chars.Append(((char)(int)lineHash[line]));
-                }
-                else {
+                } else {
                     if (lines.Count == maxLines) {
                         // Bail out at 65535 because char 65536 == char 0.
                         line = new string(text.Slice(lineStart));
@@ -347,11 +337,11 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
             }
         }
 
-        private static void Bisect(ReadOnlySpan<char> left, ReadOnlySpan<char> right, ImmutableArray<Diff>.Builder builder) {
+        private static void Bisect(ReadOnlySpan<char> text1, ReadOnlySpan<char> text2, ImmutableArray<Diff>.Builder builder) {
             // Cache the text lengths to prevent multiple calls.
-            int leftLength = left.Length;
-            int rightLength = right.Length;
-            int max_d = (leftLength + rightLength + 1) / 2;
+            int text1_length = text1.Length;
+            int text2_length = text2.Length;
+            int max_d = (text1_length + text2_length + 1) / 2;
             int v_offset = max_d;
             int v_length = 2 * max_d;
             int[] v1 = new int[v_length];
@@ -362,7 +352,7 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
             }
             v1[v_offset + 1] = 0;
             v2[v_offset + 1] = 0;
-            int delta = leftLength - rightLength;
+            int delta = text1_length - text2_length;
             // If the total number of characters is odd, then the front path will
             // collide with the reverse path.
             bool front = (delta % 2 != 0);
@@ -373,39 +363,37 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
             int k2start = 0;
             int k2end = 0;
             for (int d = 0; d < max_d; d++) {
+
                 // Walk the front path one step.
                 for (int k1 = -d + k1start; k1 <= d - k1end; k1 += 2) {
                     int k1_offset = v_offset + k1;
                     int x1;
                     if (k1 == -d || k1 != d && v1[k1_offset - 1] < v1[k1_offset + 1]) {
                         x1 = v1[k1_offset + 1];
-                    }
-                    else {
+                    } else {
                         x1 = v1[k1_offset - 1] + 1;
                     }
                     int y1 = x1 - k1;
-                    while (x1 < leftLength && y1 < rightLength
-                          && left[x1] == right[y1]) {
+                    while (x1 < text1_length && y1 < text2_length
+                          && text1[x1] == text2[y1]) {
                         x1++;
                         y1++;
                     }
                     v1[k1_offset] = x1;
-                    if (x1 > leftLength) {
+                    if (x1 > text1_length) {
                         // Ran off the right of the graph.
                         k1end += 2;
-                    }
-                    else if (y1 > rightLength) {
+                    } else if (y1 > text2_length) {
                         // Ran off the bottom of the graph.
                         k1start += 2;
-                    }
-                    else if (front) {
+                    } else if (front) {
                         int k2_offset = v_offset + delta - k1;
                         if (k2_offset >= 0 && k2_offset < v_length && v2[k2_offset] != -1) {
                             // Mirror x2 onto top-left coordinate system.
-                            int x2 = leftLength - v2[k2_offset];
+                            int x2 = text1_length - v2[k2_offset];
                             if (x1 >= x2) {
                                 // Overlap detected.
-                                BisectSplit(left, right, x1, y1, builder);
+                                BisectSplit(text1, text2, x1, y1, builder);
                                 return;
                             }
                         }
@@ -418,54 +406,50 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
                     int x2;
                     if (k2 == -d || k2 != d && v2[k2_offset - 1] < v2[k2_offset + 1]) {
                         x2 = v2[k2_offset + 1];
-                    }
-                    else {
+                    } else {
                         x2 = v2[k2_offset - 1] + 1;
                     }
                     int y2 = x2 - k2;
-                    while (x2 < leftLength && y2 < rightLength
-                        && left[leftLength - x2 - 1]
-                        == right[rightLength - y2 - 1]) {
+                    while (x2 < text1_length && y2 < text2_length
+                        && text1[text1_length - x2 - 1]
+                        == text2[text2_length - y2 - 1]) {
                         x2++;
                         y2++;
                     }
                     v2[k2_offset] = x2;
-                    if (x2 > leftLength) {
+                    if (x2 > text1_length) {
                         // Ran off the left of the graph.
                         k2end += 2;
-                    }
-                    else if (y2 > rightLength) {
+                    } else if (y2 > text2_length) {
                         // Ran off the top of the graph.
                         k2start += 2;
-                    }
-                    else if (!front) {
+                    } else if (!front) {
                         int k1_offset = v_offset + delta - k2;
                         if (k1_offset >= 0 && k1_offset < v_length && v1[k1_offset] != -1) {
                             int x1 = v1[k1_offset];
                             int y1 = v_offset + x1 - k1_offset;
                             // Mirror x2 onto top-left coordinate system.
-                            x2 = leftLength - v2[k2_offset];
+                            x2 = text1_length - v2[k2_offset];
                             if (x1 >= x2) {
                                 // Overlap detected.
-                                BisectSplit(left, right, x1, y1, builder);
+                                BisectSplit(text1, text2, x1, y1, builder);
                                 return;
                             }
                         }
                     }
                 }
             }
-            // Diff took too long and hit the deadline or
+
             // number of diffs equals number of characters, no commonality at all.
-            builder.Add(new Diff(Operation.DELETE, left));
-            builder.Add(new Diff(Operation.INSERT, right));
+            builder.AddIfNotEmpty(new Diff(Operation.DELETE, text1));
+            builder.AddIfNotEmpty(new Diff(Operation.INSERT, text2));
         }
 
-        private static void BisectSplit(ReadOnlySpan<char> left, ReadOnlySpan<char> right, int x, int y, ImmutableArray<Diff>.Builder builder)
-        {
-            var text1a = left.Slice(0, x);
-            var text2a = right.Slice(0, y);
-            var text1b = left.Slice(x);
-            var text2b = right.Slice(y);
+        private static void BisectSplit(ReadOnlySpan<char> text1, ReadOnlySpan<char> text2, int x, int y, ImmutableArray<Diff>.Builder builder) {
+            var text1a = text1.Slice(0, x+1);
+            var text2a = text2.Slice(0, y);
+            var text1b = text1.Slice(x+1);
+            var text2b = text2.Slice(y);
 
             ComputeDiffImpl(text1a, text2a, builder);
             ComputeDiffImpl(text1b, text2b, builder);
@@ -476,7 +460,7 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
             // Stack of indices where equalities are found.
             Stack<int> equalities = new Stack<int>();
             // Always equal to equalities[equalitiesLength-1][1]
-            (int startIndex, int endIndex) lastEquality = default;
+           ReadOnlySpan<char> lastEquality = default;
             int pointer = 0;  // Index of current position.
             // Number of characters that changed prior to the equality.
             int length_insertions1 = 0;
@@ -491,22 +475,20 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
                     length_deletions1 = length_deletions2;
                     length_insertions2 = 0;
                     length_deletions2 = 0;
-                    lastEquality = (builder[pointer].StartIndex, builder[pointer].EndIndex);
-                }
-                else {
+                    lastEquality = builder[pointer].Text.Span;
+                } else {
                     if (builder[pointer].Operation == Operation.INSERT) {
-                        length_insertions2 += builder[pointer].Length;
-                    }
-                    else {
-                        length_deletions2 += builder[pointer].Length;
+                        length_insertions2 += builder[pointer].Text.Length;
+                    } else {
+                        length_deletions2 += builder[pointer].Text.Length;
                     }
                     // Eliminate an equality that is smaller or equal to the edits on both
                     // sides of it.
                     if (lastEquality != default &&
-                       ((lastEquality.endIndex - lastEquality.startIndex) <= Math.Max(length_insertions1, length_deletions1)) &&
-                       ((lastEquality.endIndex - lastEquality.startIndex) <= Math.Max(length_insertions2, length_deletions2))) {
+                       (lastEquality.Length <= Math.Max(length_insertions1, length_deletions1)) &&
+                       (lastEquality.Length <= Math.Max(length_insertions2, length_deletions2))) {
                         // Duplicate record.
-                        builder.Insert(equalities.Peek(), new Diff(Operation.DELETE, lastEquality.startIndex, lastEquality.endIndex));
+                        builder.Insert(equalities.Peek(), new Diff(Operation.DELETE, lastEquality));
                         // Change second copy to insert.
                         builder[equalities.Peek() + 1].Operation = Operation.INSERT;
                         // Throw away the equality we just deleted.
@@ -558,8 +540,7 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
                             builder[pointer + 1].Text = insertion.Slice(overlap_length1).ToArray();
                             pointer++;
                         }
-                    }
-                    else {
+                    } else {
                         if (overlap_length2 >= deletion.Length / 2.0 ||
                             overlap_length2 >= insertion.Length / 2.0) {
                             // Reverse overlap found.
@@ -591,8 +572,7 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
             // Truncate the longer string.
             if (leftLength > rightLength) {
                 left = left.Slice(leftLength - rightLength);
-            }
-            else if (leftLength < rightLength) {
+            } else if (leftLength < rightLength) {
                 right = right.Slice(0, leftLength);
             }
             int textLength = Math.Min(leftLength, rightLength);
@@ -666,16 +646,14 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
                         // We have an improvement, save it back to the diff.
                         if (bestEquality1.Length != 0) {
                             builder[pointer - 1].Text = bestEquality1.ToArray();
-                        }
-                        else {
+                        } else {
                             builder.RemoveAt(pointer - 1);
                             pointer--;
                         }
                         builder[pointer].Text = bestEdit.ToArray();
                         if (bestEquality2.Length != 0) {
                             builder[pointer + 1].Text = bestEquality2.ToArray();
-                        }
-                        else {
+                        } else {
                             builder.RemoveAt(pointer + 1);
                             pointer--;
                         }
@@ -705,20 +683,16 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
             if (blankLine1 || blankLine2) {
                 // Five points for blank lines.
                 return 5;
-            }
-            else if (lineBreak1 || lineBreak2) {
+            } else if (lineBreak1 || lineBreak2) {
                 // Four points for line breaks.
                 return 4;
-            }
-            else if (nonAlphaNumeric1 && !whitespace1 && whitespace2) {
+            } else if (nonAlphaNumeric1 && !whitespace1 && whitespace2) {
                 // Three points for end of sentences.
                 return 3;
-            }
-            else if (whitespace1 || whitespace2) {
+            } else if (whitespace1 || whitespace2) {
                 // Two points for whitespace.
                 return 2;
-            }
-            else if (nonAlphaNumeric1 || nonAlphaNumeric2) {
+            } else if (nonAlphaNumeric1 || nonAlphaNumeric2) {
                 // One point for non-alphanumeric.
                 return 1;
             }
@@ -762,8 +736,7 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
                                         var existing = new string(builder[pointer - count_delete - count_insert - 1].Text.ToArray());
                                         existing += new string(text_insert.AsSpan().Slice(0, commonlength));
                                         builder[pointer - count_delete - count_insert - 1].Text = existing.AsMemory();
-                                    }
-                                    else {
+                                    } else {
                                         builder.Insert(0, new Diff(Operation.EQUAL,
                                             text_insert.Substring(0, commonlength)));
                                         pointer++;
@@ -795,14 +768,12 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
                                 pointer++;
                             }
                             pointer++;
-                        }
-                        else if (pointer != 0
-                          && builder[pointer - 1].Operation == Operation.EQUAL) {
+                        } else if (pointer != 0
+                            && builder[pointer - 1].Operation == Operation.EQUAL) {
                             // Merge this equality with the previous one.
                             builder[pointer - 1].Text = (new string(builder[pointer - 1].Text.ToArray()) + new string(builder[pointer].Text.ToArray())).AsMemory();
                             builder.RemoveAt(pointer);
-                        }
-                        else {
+                        } else {
                             pointer++;
                         }
                         count_insert = 0;
@@ -830,14 +801,13 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
                         StringComparison.Ordinal)) {
                         // Shift the edit over the previous equality.
                         string text1 = new string(builder[pointer - 1].Text.ToArray());
-                        string text2 = new string(builder[pointer].Text.Slice(0, builder[pointer].Text.Length -builder[pointer - 1].Text.Length).ToArray());
+                        string text2 = new string(builder[pointer].Text.Slice(0, builder[pointer].Text.Length - builder[pointer - 1].Text.Length).ToArray());
                         builder[pointer].Text = (text1 + text2).AsMemory();
                         builder[pointer + 1].Text = (new string(builder[pointer - 1].Text.ToArray()) + new string(builder[pointer + 1].Text.ToArray())).AsMemory();
                         builder.Splice(pointer - 1, 1);
                         changes = true;
-                    }
-                    else if (builder[pointer].Text.Span.StartsWith(builder[pointer + 1].Text.Span,
-                      StringComparison.Ordinal)) {
+                    } else if (builder[pointer].Text.Span.StartsWith(builder[pointer + 1].Text.Span,
+                        StringComparison.Ordinal)) {
                         // Shift the edit over the next equality.
                         var text1 = new string(builder[pointer - 1].Text.ToArray());
                         var text2 = new string(builder[pointer + 1].Text.ToArray());
@@ -862,21 +832,11 @@ namespace Microsoft.CodeAnalysis.DiffMatchPatch {
         public Operation Operation { get; set; }
         public ReadOnlyMemory<char> Text { get; set; }
 
-        public int StartIndex { get; }
-        public int EndIndex { get; }
-        public int Length => EndIndex - StartIndex;
-
         public string GetText() { return new string(Text.ToArray()); }
 
         public Diff(Operation operation, ReadOnlySpan<char> text) {
             Operation = operation;
             Text = text.ToArray();
-        }
-
-        public Diff(Operation operation, int startIndex, int endIndex) {
-            Operation = operation;
-            StartIndex = startIndex;
-            EndIndex = endIndex;
         }
 
         public override int GetHashCode() {

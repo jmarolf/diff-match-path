@@ -4,10 +4,17 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
 
-namespace Microsoft.CodeAnalysis.DiffMatchPatch
+namespace Microsoft.CodeAnalysis.Text
 {
     internal static class ImmuableArrayBuildExtensions
     {
+
+        public static void AddIfNotEmpty(this ImmutableArray<Diff>.Builder input, Diff diff) {
+            if (diff.Text.Length > 0) {
+                input.Add(diff);
+            }
+        }
+
         public static ImmutableArray<T>.Builder Splice<T>(this ImmutableArray<T>.Builder input, int start, int count, params T[] rangeToAdd)
         {
             var deletedRange = input.GetRange(start, count);

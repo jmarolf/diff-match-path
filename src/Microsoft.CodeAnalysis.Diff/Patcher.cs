@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Immutable;
 
-namespace Microsoft.CodeAnalysis.DiffMatchPatch {
+namespace Microsoft.CodeAnalysis.Text {
     public static class Patcher {
         public static ImmutableArray<Patch> ComputePatch(string left, string right) {
             return ComputePatch(left.AsSpan(), right.AsSpan());
